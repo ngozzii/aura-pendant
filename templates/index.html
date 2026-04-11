@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Aura Dashboard</title>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f5f6fa;
+            padding: 20px;
+        }
+
+        h1 {
+            color: #2f3640;
+            margin-bottom: 20px;
+        }
+
+        .container {
+            display: flex;
+            gap: 20px;
+        }
+
+        .card {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            width: 320px;
+            box-shadow: 0 6px 15px rgba(0,0,0,0.08);
+        }
+
+        .card.map {
+            flex: 1;
+        }
+
+        .item {
+            padding: 12px;
+            border-bottom: 1px solid #eee;
+            transition: background 0.2s ease;
+            transition: background 0.3s ease, transform 0.2s ease;
+        }
+
+        .item:hover {
+            background: #f1f2f6;
+            cursor: pointer;
+            transform: scale(1.01);
+        }
+
+        .item a {
+            text-decoration: none;
+            color: #2f3640;
+            font-size: 16px;
+        }
+
+        .item a:hover {
+            text-decoration: underline;
+        }
+
+        .status {
+            font-weight: bold;
+        }
+
+        .lost {
+            color: #e84118;
+        }
+
+        .active {
+            color: #44bd32;
+        }
+
+        .leaving {
+            color: #fbc531;
+        }
+
+        .metric {
+            font-size: 13px;
+            color: #555;
+        }
+
+        iframe {
+            width: 100%;
+            height: 500px;
+            border: none;
+            border-radius: 12px;
+        }
+
+        .subtitle {
+            font-size: 13px;
+            color: #888;
+            margin-bottom: 10px;
+        }
+
+        .map-toolbar {
+            margin-bottom: 10px;
+        }
+
+        .map-toolbar button {
+            padding: 8px 14px;
+            font-size: 14px;
+            border-radius: 8px;
+            border: 1px solid #dcdde1;
+            background: #fff;
+            color: #2f3640;
+            cursor: pointer;
+        }
+
+        .map-toolbar button:hover {
+            background: #f1f2f6;
+        }
+    </style>
+</head>
+
+<body>
+
+<h1>Aura Dashboard</h1>
+
+<div class="container">
+
+    <!-- Items Panel -->
+    <div class="card" id="tracked-items-root">
+        <h2>Tracked Items</h2>
+        <div class="subtitle">Click an item to locate it on the map</div>
+
+        {% for item in items %}
+        <div class="item">
+
+            <!-- Clickable item name -->
+            <a href="#" onclick="focusItem('{{ item.name }}')">
+                <strong>{{ item.name }}</strong>
+            </a><br>
+
+            <!-- Status -->
+            Status:
+            <span class="status {{ 'lost' if item.state == 'LEFT BEHIND' else ('leaving' if item.state == 'LEAVING' else 'active') }}">
+                {{ item.state }}
+            </span><br>
+
+            <!-- Metrics -->
+            <span class="metric">RSSI: {{ item.last_rssi }}</span><br>
+            <span class="metric">Distance: {{ item.last_distance }} m</span>
+
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Map Panel -->
+    <div class="card map">
+        <h2>Map</h2>
+        <div class="subtitle">Real-time item proximity and last known location</div>
+
+        <div class="map-toolbar">
+            <button type="button" onclick="centerOnUser()">Center on Me</button>
+        </div>
+
+        <iframe src="/map" name="mapframe"></iframe>
+    </div>
+
+</div>
+
+<script>
+const REFRESH_PAUSE_AFTER_INTERACTION_MS = 1500;
+
+let currentFocusedItem = null;
+let currentCenterMode = null;
+let lastInteractionTime = 0;
+let previousStates = {};
+
+function focusItem(itemName) {
+    const iframe = document.getElementsByName("mapframe")[0];
+
+    lastInteractionTime = Date.now();
+    currentCenterMode = null;
+    currentFocusedItem = itemName;
+
+    const timestamp = new Date().getTime();
+
+    iframe.src = `/map?item=${encodeURIComponent(itemName)}&t=${timestamp}`;
+}
+
+function centerOnUser() {
+    const iframe = document.getElementsByName("mapframe")[0];
+
+    lastInteractionTime = Date.now();
+    currentCenterMode = "user";
+    currentFocusedItem = null;
+
+    iframe.src = `/map?center=user&t=${Date.now()}`;
+}
+
+function refreshMapFrame() {
+    if (Date.now() - lastInteractionTime < REFRESH_PAUSE_AFTER_INTERACTION_MS) {
+        return;
+    }
+    const iframe = document.getElementsByName("mapframe")[0];
+    const u = new URL("/map", window.location.origin);
+    if (currentCenterMode === "user") {
+        u.searchParams.set("center", "user");
+    } else if (currentFocusedItem) {
+        u.searchParams.set("item", currentFocusedItem);
+    }
+    u.searchParams.set("t", Date.now());
+    iframe.src = u.pathname + u.search;
+}
+
+function collectItemStates() {
+    const states = {};
+    const root = document.getElementById("tracked-items-root");
+    if (!root) {
+        return states;
+    }
+    root.querySelectorAll(".item").forEach((row) => {
+        const nameEl = row.querySelector("strong");
+        const statusEl = row.querySelector(".status");
+        if (nameEl && statusEl) {
+            states[nameEl.textContent.trim()] = statusEl.textContent.trim();
+        }
+    });
+    return states;
+}
+
+function itemStatesDiffer(current, previous) {
+    const keys = new Set([...Object.keys(current), ...Object.keys(previous)]);
+    for (const k of keys) {
+        if (current[k] !== previous[k]) {
+            return true;
+        }
+    }
+    return false;
+}
+
+async function refreshItemsPanel() {
+    if (Date.now() - lastInteractionTime < REFRESH_PAUSE_AFTER_INTERACTION_MS) {
+        return false;
+    }
+    try {
+        const res = await fetch(window.location.pathname + "?t=" + Date.now(), {
+            cache: "no-store"
+        });
+        const html = await res.text();
+        const doc = new DOMParser().parseFromString(html, "text/html");
+        const fresh = doc.getElementById("tracked-items-root");
+        const cur = document.getElementById("tracked-items-root");
+        if (fresh && cur) {
+            cur.innerHTML = fresh.innerHTML;
+            return true;
+        }
+    } catch (e) {}
+    return false;
+}
+
+setInterval(async () => {
+    const panelUpdated = await refreshItemsPanel();
+    if (!panelUpdated) {
+        return;
+    }
+    const currentStates = collectItemStates();
+    if (itemStatesDiffer(currentStates, previousStates)) {
+        refreshMapFrame();
+    }
+    previousStates = { ...currentStates };
+}, 1000);
+</script>
+
+</body>
+</html>
