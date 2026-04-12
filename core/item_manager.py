@@ -17,6 +17,16 @@ class ItemManager:
     def all_items(self):
         return self.items.values()
 
+    def discard_item(self, name):
+        self.items.pop(name, None)
+
+    def rename_item(self, old_name, new_name):
+        if old_name not in self.items:
+            return
+        tracker = self.items.pop(old_name)
+        tracker.name = new_name
+        self.items[new_name] = tracker
+
     def get_leaving_items(self, leaving_flags):
         """
         Returns list of items currently being left behind

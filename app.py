@@ -1,8 +1,11 @@
-from flask import Flask, render_template, send_file, request
+import atexit
 import threading
 import time
 
+from flask import Flask, render_template, send_file, request, redirect
+
 from config import USE_SIMULATION
+from core.alert_manager import AlertManager
 from core.item_manager import ItemManager
 from core.notifier import Notifier
 from core.system_engine import SystemEngine
@@ -24,8 +27,16 @@ app = Flask(__name__)
 # System setup
 # -----------------------------
 manager = ItemManager()
-notifier = Notifier()
-engine = SystemEngine(manager, notifier)
+alert_manager = AlertManager()
+notifier = Notifier(alert_manager)
+engine = SystemEngine(manager, notifier, alert_manager)
+
+atexit.register(engine.cleanup)
+
+
+def _registered_trackers():
+    names = [d["name"] for d in engine.storage.get_devices() if d.get("name")]
+    return [manager.get_item(n) for n in names]
 
 
 # -----------------------------
@@ -52,12 +63,56 @@ def background_update():
 @app.route("/")
 def dashboard():
     # IMPORTANT: DO NOT update system here anymore
-    items = list(manager.all_items())
+    items = _registered_trackers()
+
+    registered_ble = {
+        d.get("ble_name") or d.get("name")
+        for d in engine.storage.get_devices()
+    }
+
+    detected_devices = engine.detected_devices
 
     return render_template(
         "index.html",
-        items=items
+        items=items,
+        detected_devices=detected_devices,
+        registered_ble=registered_ble,
     )
+
+
+@app.route("/add", methods=["POST"])
+def add_device():
+    name = request.form.get("name", "").strip()
+    ble_name = request.form.get("ble_name", "").strip()
+    display_name = name or ble_name
+    if display_name:
+        if ble_name:
+            engine.storage.create_device(display_name, ble_name)
+        else:
+            engine.storage.create_device(display_name)
+        engine.storage.flush()
+    return redirect("/")
+
+
+@app.route("/rename", methods=["POST"])
+def rename_device():
+    old = request.form.get("old_name", "").strip()
+    new = request.form.get("new_name", "").strip()
+    if old and new:
+        if engine.storage.rename_device(old, new):
+            manager.rename_item(old, new)
+        engine.storage.flush()
+    return redirect("/")
+
+
+@app.route("/remove", methods=["POST"])
+def remove_device():
+    name = request.form.get("name", "").strip()
+    if name:
+        engine.storage.remove_device(name)
+        manager.discard_item(name)
+        engine.storage.flush()
+    return redirect("/")
 
 
 @app.route("/map")
@@ -66,7 +121,7 @@ def map_view():
     center_param = request.args.get("center")
     center_on_user = center_param == "user"
 
-    items = list(manager.all_items())
+    items = _registered_trackers()
     pendant_location = get_location()
 
     map_center = None

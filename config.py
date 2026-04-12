@@ -34,6 +34,9 @@ CONSECUTIVE_LEAVING_THRESHOLD = 2
 # RSSI level at which an item is considered "back with user"
 STRONG_RSSI_RECOVERY_THRESHOLD = -60
 
+# Below this (weaker signal) user-facing status shows "Left Behind" when not overridden by tracker state
+RSSI_DISPLAY_LOST_MAX = -85
+
 # =========================
 # Movement (MPU6050)
 # =========================
@@ -78,4 +81,4 @@ ITEM_MAP_OFFSETS = {
 
 # False = use REAL hardware (BLE + MPU6050); no simulation code path in app.py
 # True  = use simulation.fake_sensors only
-USE_SIMULATION = False
+USE_SIMULATION = True

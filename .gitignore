@@ -7,3 +7,4 @@ venv/
 *.egg-info/
 map.html
 map_*.html
+data/

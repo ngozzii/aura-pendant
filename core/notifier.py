@@ -1,11 +1,13 @@
 import time
 
 from config import ALERT_INTERVAL_SECONDS, COOLDOWN_SECONDS, MAX_ALERTS
-from sensors.vibration import vibrate
 
 
 class Notifier:
-    def __init__(self):
+    """Print / state escalation; all haptics go through AlertManager (injected)."""
+
+    def __init__(self, alert_manager):
+        self._alert_manager = alert_manager
         self.alert_count = 0
         self.state = "IDLE"
 
@@ -64,8 +66,11 @@ class Notifier:
             else:
                 print(f"[FINAL] Marking items as LEFT BEHIND: {self._names(leaving_items)}")
 
+                names = self._names(leaving_items)
                 for item in leaving_items:
                     item.mark_left_behind()
+
+                self._alert_manager.trigger_alert(names, "lost")
 
                 self.state = "COOLDOWN"
                 # COOLDOWN_SECONDS: post-final wait, configurable in config.py
@@ -76,19 +81,20 @@ class Notifier:
 
         if self.alert_count == 1:
             print(f"[ALERT 1] You might be leaving: {names}")
+            # Initial haptic is trigger_alert(..., "warning") from SystemEngine on threshold cross
         elif self.alert_count == 2:
             print(f"[ALERT 2] You ARE leaving: {names}")
+            self._alert_manager.trigger_alert(names, "escalated")
         elif self.alert_count == MAX_ALERTS:
             print(f"[ALERT 3] FINAL WARNING for: {names}")
+            self._alert_manager.trigger_alert(names, "escalated")
 
-        # Dashboard: at-risk items show as LEAVING (vibration level still follows alert tier)
+        # Dashboard: at-risk items show as LEAVING
         by_name = {i.name: i for i in self._tracked_alert_items}
         for item in items:
             item.state = "LEAVING"
             by_name[item.name] = item
         self._tracked_alert_items = list(by_name.values())
-
-        vibrate("warning" if self.alert_count == 1 else "alert")
 
     def _names(self, items):
         return ", ".join([item.name for item in items])

@@ -55,25 +55,38 @@
             text-decoration: underline;
         }
 
-        .status {
-            font-weight: bold;
-        }
-
-        .lost {
-            color: #e84118;
-        }
-
-        .active {
-            color: #44bd32;
-        }
-
-        .leaving {
-            color: #fbc531;
-        }
-
         .metric {
             font-size: 13px;
             color: #555;
+        }
+
+        .status-badge {
+            display: inline-block;
+            margin-left: 4px;
+            padding: 3px 10px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .status-badge--with-you {
+            background: #d4edda;
+            color: #1e8449;
+        }
+
+        .status-badge--moving-away {
+            background: #ffe8cc;
+            color: #b35c00;
+        }
+
+        .status-badge--left-behind {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .status-badge--not-seen {
+            background: #e2e3e5;
+            color: #383d41;
         }
 
         iframe {
@@ -106,6 +119,132 @@
         .map-toolbar button:hover {
             background: #f1f2f6;
         }
+
+        .add-device-form {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+        }
+
+        .add-device-form input[type="text"] {
+            flex: 1;
+            min-width: 140px;
+            padding: 8px 10px;
+            border: 1px solid #dcdde1;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+
+        .add-device-form button,
+        .item-actions button {
+            padding: 6px 12px;
+            font-size: 13px;
+            border-radius: 8px;
+            border: 1px solid #dcdde1;
+            background: #fff;
+            color: #2f3640;
+            cursor: pointer;
+        }
+
+        .add-device-form button:hover,
+        .item-actions button:hover {
+            background: #f1f2f6;
+        }
+
+        .item-actions {
+            margin-top: 8px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .item-actions form {
+            display: inline-flex;
+            gap: 6px;
+            align-items: center;
+        }
+
+        .item-actions input[type="text"] {
+            width: 100px;
+            padding: 4px 8px;
+            border: 1px solid #dcdde1;
+            border-radius: 6px;
+            font-size: 12px;
+        }
+
+        .detected-section {
+            margin-bottom: 20px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .detected-section h3 {
+            margin: 0 0 8px 0;
+            font-size: 16px;
+            color: #2f3640;
+        }
+
+        .detected-row {
+            margin-bottom: 12px;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px 12px;
+        }
+
+        .detected-row .ble-label {
+            font-size: 13px;
+            color: #2f3640;
+            font-weight: 600;
+        }
+
+        .detected-row .ble-label code {
+            font-weight: normal;
+            color: #555;
+            background: #f1f2f6;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+
+        .detected-row form {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .detected-row form input[type="text"] {
+            flex: 1;
+            min-width: 160px;
+            padding: 8px 10px;
+            border: 1px solid #dcdde1;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+
+        .detected-row form button {
+            padding: 6px 12px;
+            font-size: 13px;
+            border-radius: 8px;
+            border: 1px solid #dcdde1;
+            background: #fff;
+            color: #2f3640;
+            cursor: pointer;
+        }
+
+        .detected-row form button:hover {
+            background: #f1f2f6;
+        }
+
+        .added-indicator {
+            color: #4caf50;
+            font-weight: bold;
+            margin-left: 10px;
+        }
     </style>
 </head>
 
@@ -118,25 +257,66 @@
     <!-- Items Panel -->
     <div class="card" id="tracked-items-root">
         <h2>Tracked Items</h2>
-        <div class="subtitle">Click an item to locate it on the map</div>
+        <div class="subtitle">Registered devices only — click a name to show it on the map</div>
+
+        <div class="detected-section">
+            <h3>Detected Devices</h3>
+            <p class="subtitle" style="margin-top: 0;">
+                Latest BLE scan — <strong>Added</strong> means already linked to a tracked item; otherwise enter a display name to register.
+            </p>
+            {% if detected_devices %}
+                {% for dev in detected_devices %}
+                    {% if dev in registered_ble %}
+                    <div class="detected-row">
+                        <span class="ble-label">BLE: <code>{{ dev }}</code></span>
+                        <span class="added-indicator">✓ Added</span>
+                    </div>
+                    {% else %}
+                    <div class="detected-row">
+                        <span class="ble-label">BLE: <code>{{ dev }}</code></span>
+                        <form method="POST" action="/add">
+                            <input type="hidden" name="ble_name" value="{{ dev|e }}">
+                            <input type="text" name="name" placeholder="Name this device ({{ dev|e }})" required>
+                            <button type="submit">Add</button>
+                        </form>
+                    </div>
+                    {% endif %}
+                {% endfor %}
+            {% else %}
+                <p class="metric">No devices detected in the last scan.</p>
+            {% endif %}
+        </div>
+
+        <form class="add-device-form" method="POST" action="/add">
+            <input type="text" name="name" placeholder="Add new device (manual)" required>
+            <button type="submit">Add</button>
+        </form>
 
         {% for item in items %}
         <div class="item">
 
             <!-- Clickable item name -->
-            <a href="#" onclick="focusItem('{{ item.name }}')">
+            <a href="#" onclick="focusItem({{ item.name|tojson }})">
                 <strong>{{ item.name }}</strong>
             </a><br>
 
-            <!-- Status -->
-            Status:
-            <span class="status {{ 'lost' if item.state == 'LEFT BEHIND' else ('leaving' if item.state == 'LEAVING' else 'active') }}">
-                {{ item.state }}
-            </span><br>
+            <span class="metric">Status:</span>
+            <span class="status-badge status-badge--{{ item.display_status|lower|replace(' ', '-') }}">{{ item.display_status }}</span><br>
 
-            <!-- Metrics -->
-            <span class="metric">RSSI: {{ item.last_rssi }}</span><br>
-            <span class="metric">Distance: {{ item.last_distance }} m</span>
+            <span class="metric">Distance: {{ item.last_distance if item.last_distance is not none else '—' }} m</span>
+
+            <div class="item-actions">
+                <form method="POST" action="/remove">
+                    <input type="hidden" name="name" value="{{ item.name }}">
+                    <button type="submit">Remove</button>
+                </form>
+
+                <form method="POST" action="/rename">
+                    <input type="hidden" name="old_name" value="{{ item.name }}">
+                    <input type="text" name="new_name" placeholder="Rename" required>
+                    <button type="submit">Rename</button>
+                </form>
+            </div>
 
         </div>
         {% endfor %}
@@ -158,11 +338,39 @@
 
 <script>
 const REFRESH_PAUSE_AFTER_INTERACTION_MS = 1500;
+const INPUT_QUIET_MS = 3000;
 
 let currentFocusedItem = null;
 let currentCenterMode = null;
 let lastInteractionTime = 0;
+let lastFormInputTime = 0;
+let userInteracting = false;
 let previousStates = {};
+
+document.addEventListener("focusin", (e) => {
+    if (!e.target.closest("#tracked-items-root")) {
+        return;
+    }
+    if (e.target.matches("input, textarea, select")) {
+        userInteracting = true;
+        lastFormInputTime = Date.now();
+    }
+});
+
+document.addEventListener("focusout", () => {
+    setTimeout(() => {
+        const el = document.activeElement;
+        if (!el || !el.closest("#tracked-items-root")) {
+            userInteracting = false;
+        }
+    }, 0);
+});
+
+document.addEventListener("input", (e) => {
+    if (e.target.closest("#tracked-items-root")) {
+        lastFormInputTime = Date.now();
+    }
+});
 
 function focusItem(itemName) {
     const iframe = document.getElementsByName("mapframe")[0];
@@ -209,7 +417,7 @@ function collectItemStates() {
     }
     root.querySelectorAll(".item").forEach((row) => {
         const nameEl = row.querySelector("strong");
-        const statusEl = row.querySelector(".status");
+        const statusEl = row.querySelector(".status-badge");
         if (nameEl && statusEl) {
             states[nameEl.textContent.trim()] = statusEl.textContent.trim();
         }
@@ -228,6 +436,12 @@ function itemStatesDiffer(current, previous) {
 }
 
 async function refreshItemsPanel() {
+    if (userInteracting) {
+        return false;
+    }
+    if (lastFormInputTime > 0 && Date.now() - lastFormInputTime < INPUT_QUIET_MS) {
+        return false;
+    }
     if (Date.now() - lastInteractionTime < REFRESH_PAUSE_AFTER_INTERACTION_MS) {
         return false;
     }

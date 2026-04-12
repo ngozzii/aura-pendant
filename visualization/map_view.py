@@ -1,6 +1,15 @@
+import html
+
 import folium
 
 print("MAP_VIEW FILE LOADED")
+
+STATUS_COLOR = {
+    "With You": "green",
+    "Moving Away": "orange",
+    "Left Behind": "red",
+    "Not Seen": "gray",
+}
 
 
 def generate_map(map_center, user_location, items, focus_item=None, center_on_user=False):
@@ -17,57 +26,42 @@ def generate_map(map_center, user_location, items, focus_item=None, center_on_us
     m = folium.Map(
         location=[map_center["lat"], map_center["lon"]],
         zoom_start=zoom,
-        tiles="CartoDB positron"
+        tiles="CartoDB positron",
     )
 
     # User / pendant position (distinct blue marker)
     folium.Marker(
         [user_location["lat"], user_location["lon"]],
         popup="<b>You</b>",
-        icon=folium.Icon(color="blue", icon="user", prefix="fa")
+        icon=folium.Icon(color="blue", icon="user", prefix="fa"),
     ).add_to(m)
 
-    # Item markers
+    # Item pins only (no distance circles)
     for item in items:
         if not item.last_location:
             continue
 
         lat = item.last_location["lat"]
         lon = item.last_location["lon"]
+        disp = item.display_status
 
         if item.name == focus_item:
             color = "blue"
-        elif item.is_lost():
-            color = "red"
         else:
-            color = "green"
+            color = STATUS_COLOR.get(disp, "blue")
 
-        popup_text = folium.Popup(
-            f"""
-            <b>{item.name}</b><br>
-            Status: {item.state}<br>
-            RSSI: {item.last_rssi}<br>
-            Distance: {item.last_distance} m
-            """,
-            max_width=250
+        popup = folium.Popup(
+            html.escape(f"{item.name} - {disp}"),
+            max_width=280,
         )
-
-        #print("Rendering items:", [item.name for item in items])
+        tooltip = html.escape(item.name)
 
         folium.Marker(
             [lat, lon],
-            popup=popup_text,
-            icon=folium.Icon(color=color, icon="info-sign")
+            popup=popup,
+            tooltip=tooltip,
+            icon=folium.Icon(color=color, icon="info-sign"),
         ).add_to(m)
-
-        if item.last_distance:
-            folium.Circle(
-                location=[lat, lon],
-                radius=item.last_distance,
-                color=color,
-                fill=True,
-                fill_opacity=0.15
-            ).add_to(m)
 
     filename = "map.html"
     m.save(filename)

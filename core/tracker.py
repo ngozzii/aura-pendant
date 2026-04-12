@@ -49,7 +49,13 @@ class ItemTracker:
 
     def is_lost(self):
         return self.state == "LEFT BEHIND"
-    
+
+    @property
+    def display_status(self):
+        from core.item_status import get_item_display_status
+
+        return get_item_display_status(self)
+
     def get_last_seen_info(self):
         if not self.last_seen_time:
             return "No data"
