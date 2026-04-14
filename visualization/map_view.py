@@ -4,11 +4,10 @@ import folium
 
 print("MAP_VIEW FILE LOADED")
 
-STATUS_COLOR = {
-    "With You": "green",
-    "Moving Away": "orange",
-    "Left Behind": "red",
-    "Not Seen": "gray",
+STATUS_COLOR_BY_KIND = {
+    "with-you": "green",
+    "moving-away": "orange",
+    "left-behind": "red",
 }
 
 
@@ -48,7 +47,7 @@ def generate_map(map_center, user_location, items, focus_item=None, center_on_us
         if item.name == focus_item:
             color = "blue"
         else:
-            color = STATUS_COLOR.get(disp, "blue")
+            color = STATUS_COLOR_BY_KIND.get(item.status_kind, "blue")
 
         popup = folium.Popup(
             html.escape(f"{item.name} - {disp}"),

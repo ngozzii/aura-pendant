@@ -7,34 +7,44 @@ def test_with_you_status():
     assert get_status(-60) == "With You"
 
 
-def test_moving_away_status():
+def test_moving_away_rssi_band():
     assert get_status(-75) == "Moving Away"
 
 
-def test_left_behind_rssi_status():
+def test_left_behind_rssi_band():
     assert get_status(-90) == "Left Behind"
 
 
-def test_not_seen_status():
-    assert get_status(None) == "Not Seen"
+def test_missing_rssi_maps_to_with_you_not_not_seen():
+    assert get_status(None) == "With You"
 
 
 class MockItem:
-    def __init__(self, state=None, last_rssi=None):
+    def __init__(self, state="WITH YOU", is_visible=True):
         self.state = state
-        self.last_rssi = last_rssi
+        self.is_visible = is_visible
 
 
-def test_left_behind_overrides():
-    item = MockItem(state="LEFT BEHIND", last_rssi=-60)
+def test_left_behind_label():
+    item = MockItem(state="LEFT BEHIND", is_visible=True)
     assert get_item_display_status(item) == "Left Behind"
 
 
-def test_leaving_overrides():
-    item = MockItem(state="LEAVING", last_rssi=-60)
+def test_leaving_label():
+    item = MockItem(state="LEAVING", is_visible=True)
     assert get_item_display_status(item) == "Moving Away"
 
 
-def test_fallback_to_moving_away_rssi():
-    item = MockItem(state=None, last_rssi=-75)
-    assert get_item_display_status(item) == "Moving Away"
+def test_with_you_default_state():
+    item = MockItem(state="WITH YOU", is_visible=True)
+    assert get_item_display_status(item) == "With You"
+
+
+def test_not_seen_tag_appended():
+    item = MockItem(state="LEFT BEHIND", is_visible=False)
+    assert get_item_display_status(item) == "Left Behind (Not Seen)"
+
+
+def test_with_you_not_seen_tag():
+    item = MockItem(state="WITH YOU", is_visible=False)
+    assert get_item_display_status(item) == "With You (Not Seen)"

@@ -3,10 +3,9 @@
 # =========================
 
 WINDOW_SIZE = 5
-MIN_DROP_COUNT = 3
 
-# RSSI must decrease by at least this amount over the window
-RSSI_TOTAL_CHANGE_THRESHOLD = -10
+# Net RSSI change (last - first) must be <= this (dBm) for is_leaving(); paired with drop_ratio in detector.py
+RSSI_TOTAL_CHANGE_THRESHOLD = -5
 
 
 # =========================
@@ -29,10 +28,13 @@ MAX_ALERTS = 3
 # =========================
 
 # Number of consecutive detections required before confirming "leaving"
-CONSECUTIVE_LEAVING_THRESHOLD = 2
+CONSECUTIVE_LEAVING_THRESHOLD = 3
 
 # RSSI level at which an item is considered "back with user"
 STRONG_RSSI_RECOVERY_THRESHOLD = -60
+
+# At or below this (weaker signal), SystemEngine may set LEAVING even if trend is noisy
+RSSI_WEAK_THRESHOLD = -65
 
 # Below this (weaker signal) user-facing status shows "Left Behind" when not overridden by tracker state
 RSSI_DISPLAY_LOST_MAX = -85
@@ -62,6 +64,10 @@ TARGET_DEVICES = {
 # Friendly names used by fake_sensors.scan_rssi() and the demo CLI (main.py)
 SIMULATION_ITEM_NAMES = ["Keys", "Wallet", "Bag"]
 
+# When USE_SIMULATION is True and storage has no devices yet, seed tracked items (testing only).
+# Real hardware mode never auto-seeds; tracked list is only what is loaded from storage.json.
+SIMULATION_SEED_TRACKED_IF_EMPTY = True
+
 
 # =========================
 # Map UI (simulation + real)
@@ -81,4 +87,4 @@ ITEM_MAP_OFFSETS = {
 
 # False = use REAL hardware (BLE + MPU6050); no simulation code path in app.py
 # True  = use simulation.fake_sensors only
-USE_SIMULATION = True
+USE_SIMULATION = False

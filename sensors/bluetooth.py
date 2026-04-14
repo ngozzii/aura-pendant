@@ -2,7 +2,8 @@ import asyncio
 
 from bleak import BleakScanner
 
-from config import TARGET_DEVICES
+# Only include advertisements stronger than this (dBm); reduces distant/noisy devices.
+_RSSI_MIN_EXCLUSIVE = -75
 
 
 def _rssi_from_pair(device, adv):
@@ -11,45 +12,73 @@ def _rssi_from_pair(device, adv):
     return getattr(device, "rssi", None)
 
 
-def _match_device_to_targets(device, adv, result):
-    """If device.name matches a target substring, set result[friendly_name] = rssi (first wins per friendly)."""
-    if device.name is None:
-        return
-    dn_lower = device.name.lower()
+def _normalize_name(device):
+    n = getattr(device, "name", None) or ""
+    return n.strip()
+
+
+def _row_from_device(device, adv):
+    name = _normalize_name(device)
+    if not name:
+        return None
     rssi = _rssi_from_pair(device, adv)
     if rssi is None:
-        return
-
-    for friendly_name, target_name in TARGET_DEVICES.items():
-        if friendly_name in result:
-            continue
-        if target_name.lower() in dn_lower:
-            print(f"[BLE] Matched {friendly_name}: {device.name} ({rssi})")
-            result[friendly_name] = rssi
+        return None
+    if rssi <= _RSSI_MIN_EXCLUSIVE:
+        return None
+    address = (getattr(device, "address", None) or "").strip()
+    if not address:
+        return None
+    return {
+        "name": device.name.strip() if device.name else name,
+        "address": address,
+        "rssi": int(rssi),
+    }
 
 
 async def _scan_rssi_async():
-    """Scan ~2s; return friendly_name -> RSSI for matched TARGET_DEVICES only."""
-    result = {}
+    """
+    Discover nearby BLE peripherals. No filtering by tracked devices.
+    Returns sorted list of dicts: name, address, rssi (strongest first).
+    """
+    rows = []
 
     try:
         discovered = await BleakScanner.discover(timeout=2.0, return_adv=True)
     except TypeError:
         discovered = await BleakScanner.discover(timeout=2.0)
         for device in discovered:
-            _match_device_to_targets(device, None, result)
-        return result
+            row = _row_from_device(device, None)
+            if row:
+                rows.append(row)
+        by_addr = {}
+        for row in rows:
+            key = row["address"].lower().replace("-", ":")
+            if key not in by_addr or row["rssi"] > by_addr[key]["rssi"]:
+                by_addr[key] = row
+        return sorted(by_addr.values(), key=lambda x: -x["rssi"])
 
     for _address, (device, adv) in discovered.items():
-        _match_device_to_targets(device, adv, result)
+        row = _row_from_device(device, adv)
+        if row:
+            rows.append(row)
 
-    return result
+    by_addr = {}
+    for row in rows:
+        key = row["address"].lower().replace("-", ":")
+        if key not in by_addr or row["rssi"] > by_addr[key]["rssi"]:
+            by_addr[key] = row
+    return sorted(by_addr.values(), key=lambda x: -x["rssi"])
 
 
 def scan_rssi():
     """
-    Returns only registered BLE peripherals, e.g.:
-        {"Keys": -65}
-    Missing devices are omitted. Requires: pip install bleak
+    Returns all nearby BLE devices with a non-empty name and RSSI > -75 dBm.
+
+    Each entry:
+        {"name": str, "address": str, "rssi": int}
+    Sorted by RSSI descending (strongest first).
+
+    Requires: pip install bleak
     """
     return asyncio.run(_scan_rssi_async())

@@ -18,7 +18,7 @@ except ImportError:
 
 
 class MotorController:
-    _SLEEP_STEP = 0.05
+    _SLEEP_STEP = 0.01
 
     def __init__(self, pin=18):
         self.pin = pin
@@ -54,15 +54,21 @@ class MotorController:
         if self.simulation_mode:
             print("[SIMULATION] Motor ON")
         else:
-            GPIO.output(self.pin, GPIO.HIGH)
-            print("Motor ON")
+            try:
+                GPIO.output(self.pin, GPIO.HIGH)
+                print("Motor ON")
+            except Exception as e:
+                print(f"[ERROR] GPIO ON failed: {e}")
 
     def off(self):
         if self.simulation_mode:
             print("[SIMULATION] Motor OFF")
         else:
-            GPIO.output(self.pin, GPIO.LOW)
-            print("Motor OFF")
+            try:
+                GPIO.output(self.pin, GPIO.LOW)
+                print("Motor OFF")
+            except Exception as e:
+                print(f"[ERROR] GPIO OFF failed: {e}")
 
     def stop(self):
         """Stop in-flight vibration and release the busy flag so a new pattern can start."""

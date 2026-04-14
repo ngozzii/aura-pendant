@@ -5,6 +5,9 @@ from config import SIMULATION_ITEM_NAMES
 _RSSI_CLOSE = -30.0
 _RSSI_FAR = -100.0
 
+# Match sensors/bluetooth.py: only "visible" advertisements in UI / engine scan list
+_RSSI_MIN_EXCLUSIVE = -75
+
 
 def get_location():
     return {
@@ -33,10 +36,11 @@ _rssi_sim_state = {}
 
 def scan_rssi():
     """
-    Simulate RSSI with directional trends so leaving / lost detection can fire.
-    Each call is one "update" (~2s apart in the app loop).
+    Simulate BLE discovery: same shape as sensors.bluetooth.scan_rssi().
+
+    Returns list of {"name", "address", "rssi"}, RSSI descending, only RSSI > -75.
     """
-    data = {}
+    rows = []
 
     for item in SIMULATION_ITEM_NAMES:
         _init_state(item, _rssi_sim_state)
@@ -73,7 +77,16 @@ def scan_rssi():
             s["away_streak_left"] -= 1
 
         rssi_out = int(round(s["rssi"]))
-        data[item] = rssi_out
         print(f"[SIM] {item} -> {d} -> RSSI: {rssi_out}")
 
-    return data
+        if rssi_out > _RSSI_MIN_EXCLUSIVE:
+            rows.append(
+                {
+                    "name": item,
+                    "address": f"sim:{item}",
+                    "rssi": rssi_out,
+                }
+            )
+
+    rows.sort(key=lambda x: -x["rssi"])
+    return rows

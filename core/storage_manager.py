@@ -74,9 +74,10 @@ class StorageManager:
     def get_devices(self):
         return self.data["devices"]
 
-    def create_device(self, name, ble_name=None):
+    def create_device(self, name, ble_name=None, address=None):
         name = (name or "").strip()
         ble_name = (ble_name or "").strip() or name
+        address = (address or "").strip() or None
         if not name:
             print("Device name cannot be empty")
             return False
@@ -90,12 +91,22 @@ class StorageManager:
         if any((d.get("ble_name") or d.get("name")) == eff_ble for d in self.data["devices"]):
             print("This BLE device is already registered")
             return False
+        if address:
+            a_norm = address.lower().replace("-", ":")
+            for d in self.data["devices"]:
+                da = d.get("address")
+                if not da:
+                    continue
+                if da.lower().replace("-", ":") == a_norm:
+                    print("This BLE address is already registered")
+                    return False
         device_id = uuid.uuid4().hex
-        self.data["devices"].append(
-            {"name": name, "ble_name": eff_ble, "id": device_id}
-        )
+        entry = {"name": name, "ble_name": eff_ble, "id": device_id}
+        if address:
+            entry["address"] = address
+        self.data["devices"].append(entry)
         self._dirty = True
-        print(f"Created device: [{name}] (BLE: {eff_ble})")
+        print(f"Created device: [{name}] (BLE: {eff_ble}, addr: {address or '—'})")
         return True
 
     def add_device(self, name, device_id):

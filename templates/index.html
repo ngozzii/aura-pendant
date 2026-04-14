@@ -89,6 +89,10 @@
             color: #383d41;
         }
 
+        .status-badge--not-visible {
+            border: 1px dashed #adb5bd;
+        }
+
         iframe {
             width: 100%;
             height: 500px;
@@ -257,30 +261,28 @@
     <!-- Items Panel -->
     <div class="card" id="tracked-items-root">
         <h2>Tracked Items</h2>
-        <div class="subtitle">Registered devices only — click a name to show it on the map</div>
+        <div class="subtitle">{{ tracked_devices|length }} saved in storage — click a name to show it on the map</div>
 
         <div class="detected-section">
-            <h3>Detected Devices</h3>
+            <h3>Nearby Devices</h3>
             <p class="subtitle" style="margin-top: 0;">
-                Latest BLE scan — <strong>Added</strong> means already linked to a tracked item; otherwise enter a display name to register.
+                Devices nearby — add one to start tracking.
             </p>
             {% if detected_devices %}
                 {% for dev in detected_devices %}
-                    {% if dev in registered_ble %}
                     <div class="detected-row">
-                        <span class="ble-label">BLE: <code>{{ dev }}</code></span>
+                        <span class="ble-label">{{ dev.name or "Nearby device" }}</span>
+                        {% if dev.is_tracked %}
                         <span class="added-indicator">✓ Added</span>
-                    </div>
-                    {% else %}
-                    <div class="detected-row">
-                        <span class="ble-label">BLE: <code>{{ dev }}</code></span>
+                        {% else %}
                         <form method="POST" action="/add">
-                            <input type="hidden" name="ble_name" value="{{ dev|e }}">
-                            <input type="text" name="name" placeholder="Name this device ({{ dev|e }})" required>
+                            <input type="hidden" name="address" value="{{ dev.address|e }}">
+                            <input type="hidden" name="ble_name" value="{{ dev.name|e }}">
+                            <input type="text" name="name" placeholder="Name this device" required>
                             <button type="submit">Add</button>
                         </form>
+                        {% endif %}
                     </div>
-                    {% endif %}
                 {% endfor %}
             {% else %}
                 <p class="metric">No devices detected in the last scan.</p>
@@ -301,7 +303,7 @@
             </a><br>
 
             <span class="metric">Status:</span>
-            <span class="status-badge status-badge--{{ item.display_status|lower|replace(' ', '-') }}">{{ item.display_status }}</span><br>
+            <span class="status-badge status-badge--{{ item.status_kind }}{% if not item.is_visible %} status-badge--not-visible{% endif %}">{{ item.display_status }}</span><br>
 
             <span class="metric">Distance: {{ item.last_distance if item.last_distance is not none else '—' }} m</span>
 

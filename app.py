@@ -4,11 +4,11 @@ import time
 
 from flask import Flask, render_template, send_file, request, redirect
 
-from config import USE_SIMULATION
+from config import SIMULATION_ITEM_NAMES, SIMULATION_SEED_TRACKED_IF_EMPTY, USE_SIMULATION
 from core.alert_manager import AlertManager
 from core.item_manager import ItemManager
 from core.notifier import Notifier
-from core.system_engine import SystemEngine
+from core.system_engine import SystemEngine, _address_norm, is_scan_row_tracked
 from visualization.map_view import generate_map
 
 if USE_SIMULATION:
@@ -30,6 +30,20 @@ manager = ItemManager()
 alert_manager = AlertManager()
 notifier = Notifier(alert_manager)
 engine = SystemEngine(manager, notifier, alert_manager)
+
+
+def _maybe_seed_simulation_tracked():
+    if not USE_SIMULATION or not SIMULATION_SEED_TRACKED_IF_EMPTY:
+        return
+    if engine.storage.get_devices():
+        return
+    for nm in SIMULATION_ITEM_NAMES:
+        engine.storage.create_device(nm, nm, address=f"sim:{nm}")
+    engine.storage.flush()
+
+
+if USE_SIMULATION:
+    _maybe_seed_simulation_tracked()
 
 atexit.register(engine.cleanup)
 
@@ -64,19 +78,29 @@ def background_update():
 def dashboard():
     # IMPORTANT: DO NOT update system here anymore
     items = _registered_trackers()
+    tracked_devices = engine.storage.get_devices()
 
-    registered_ble = {
-        d.get("ble_name") or d.get("name")
-        for d in engine.storage.get_devices()
+    scan_rows = list(engine.detected_devices)
+    tracked_addresses = {
+        _address_norm(d["address"])
+        for d in tracked_devices
+        if d.get("address")
     }
-
-    detected_devices = engine.detected_devices
+    filtered_detected = [
+        row
+        for row in scan_rows
+        if _address_norm(row.get("address")) not in tracked_addresses
+    ]
+    detected_devices = [
+        {**row, "is_tracked": is_scan_row_tracked(row, tracked_devices)}
+        for row in filtered_detected
+    ]
 
     return render_template(
         "index.html",
         items=items,
         detected_devices=detected_devices,
-        registered_ble=registered_ble,
+        tracked_devices=tracked_devices,
     )
 
 
@@ -84,12 +108,15 @@ def dashboard():
 def add_device():
     name = request.form.get("name", "").strip()
     ble_name = request.form.get("ble_name", "").strip()
+    address = request.form.get("address", "").strip()
     display_name = name or ble_name
     if display_name:
-        if ble_name:
-            engine.storage.create_device(display_name, ble_name)
-        else:
-            engine.storage.create_device(display_name)
+        eff_ble = ble_name or display_name
+        engine.storage.create_device(
+            display_name,
+            eff_ble,
+            address=address or None,
+        )
         engine.storage.flush()
     return redirect("/")
 
@@ -111,6 +138,10 @@ def remove_device():
     if name:
         engine.storage.remove_device(name)
         manager.discard_item(name)
+        engine.leaving_counter.pop(name, None)
+        engine.last_leaving_time.pop(name, None)
+        engine.leaving_confirmed.pop(name, None)
+        engine.rssi_history.pop(name, None)
         engine.storage.flush()
     return redirect("/")
 
@@ -163,4 +194,4 @@ if __name__ == "__main__":
     thread.daemon = True
     thread.start()
 
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=False)

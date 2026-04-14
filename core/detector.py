@@ -1,14 +1,26 @@
-from config import MIN_DROP_COUNT, RSSI_TOTAL_CHANGE_THRESHOLD
+from config import RSSI_TOTAL_CHANGE_THRESHOLD
 
 
-def is_leaving(rssi_values):
-    drops = 0
+def is_leaving(history):
+    """
+    Detect overall movement away (weaker RSSI) over the window.
 
-    for i in range(1, len(rssi_values)):
-        if rssi_values[i] < rssi_values[i - 1]:
-            drops += 1
+    Tolerant of small upward fluctuations: uses net change and fraction of
+    step-to-step drops, not strict monotonic decrease.
+    """
+    # Fast detection for sudden signal drop (single step)
+    if len(history) >= 2:
+        if history[-1] - history[-2] <= -6:
+            return True
 
-    total_change = rssi_values[-1] - rssi_values[0]
+    if len(history) < 2:
+        return False
 
-    # MIN_DROP_COUNT / RSSI_TOTAL_CHANGE_THRESHOLD: configurable in config.py
-    return drops >= MIN_DROP_COUNT and total_change < RSSI_TOTAL_CHANGE_THRESHOLD
+    first = history[0]
+    last = history[-1]
+    total_change = last - first
+
+    drops = sum(1 for i in range(1, len(history)) if history[i] < history[i - 1])
+    drop_ratio = drops / (len(history) - 1)
+
+    return total_change <= RSSI_TOTAL_CHANGE_THRESHOLD and drop_ratio >= 0.4

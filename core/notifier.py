@@ -4,7 +4,7 @@ from config import ALERT_INTERVAL_SECONDS, COOLDOWN_SECONDS, MAX_ALERTS
 
 
 class Notifier:
-    """Print / state escalation; all haptics go through AlertManager (injected)."""
+    """Alert escalation only; item LEAVING / WITH YOU state is owned by SystemEngine."""
 
     def __init__(self, alert_manager):
         self._alert_manager = alert_manager
@@ -12,43 +12,41 @@ class Notifier:
         self.state = "IDLE"
 
         self.last_alert_time = 0
-        # ALERT_INTERVAL_SECONDS: spacing between escalations, configurable in config.py
         self.alert_interval = ALERT_INTERVAL_SECONDS
 
         self.cooldown_until = 0
-        # Items that received LEAVING this session (cleared on reset for dashboard)
-        self._tracked_alert_items = []
+
+    def on_engine_forced_lost(self):
+        """Engine marked item LEFT BEHIND; align notifier cooldown."""
+        now = time.time()
+        self.state = "COOLDOWN"
+        self.cooldown_until = now + COOLDOWN_SECONDS
+        self.alert_count = 0
 
     def reset(self):
-        for item in self._tracked_alert_items:
-            if item.state == "LEAVING":
-                item.state = "WITH YOU"
-        self._tracked_alert_items = []
+        """Reset notifier machine only — does not change ItemTracker.state."""
         self.alert_count = 0
         self.state = "IDLE"
 
-    def update(self, leaving_items):
+    def update(self, leaving_items, leaving_hysteresis_active=False):
         now = time.time()
 
-        # 🚫 Cooldown state
         if self.state == "COOLDOWN":
             if now < self.cooldown_until:
                 return
-            else:
-                self.reset()
+            self.reset()
 
-        # 🚫 No leaving → reset
         if not leaving_items:
+            if leaving_hysteresis_active:
+                return
             if self.state != "IDLE":
                 print("[INFO] Leaving stopped → resetting alerts")
             self.reset()
             return
 
-        # 🚫 Not enough time passed → do nothing
         if now - self.last_alert_time < self.alert_interval:
             return
 
-        # 🚀 Start alert sequence
         if self.state == "IDLE":
             self.state = "ALERTING"
             self.alert_count = 1
@@ -56,7 +54,6 @@ class Notifier:
             self.last_alert_time = now
             return
 
-        # 🔁 Continue alert sequence (MAX_ALERTS from config.py)
         if self.state == "ALERTING":
             self.alert_count += 1
 
@@ -73,7 +70,6 @@ class Notifier:
                 self._alert_manager.trigger_alert(names, "lost")
 
                 self.state = "COOLDOWN"
-                # COOLDOWN_SECONDS: post-final wait, configurable in config.py
                 self.cooldown_until = now + COOLDOWN_SECONDS
 
     def _send_alert(self, items):
@@ -81,20 +77,12 @@ class Notifier:
 
         if self.alert_count == 1:
             print(f"[ALERT 1] You might be leaving: {names}")
-            # Initial haptic is trigger_alert(..., "warning") from SystemEngine on threshold cross
         elif self.alert_count == 2:
             print(f"[ALERT 2] You ARE leaving: {names}")
             self._alert_manager.trigger_alert(names, "escalated")
         elif self.alert_count == MAX_ALERTS:
             print(f"[ALERT 3] FINAL WARNING for: {names}")
             self._alert_manager.trigger_alert(names, "escalated")
-
-        # Dashboard: at-risk items show as LEAVING
-        by_name = {i.name: i for i in self._tracked_alert_items}
-        for item in items:
-            item.state = "LEAVING"
-            by_name[item.name] = item
-        self._tracked_alert_items = list(by_name.values())
 
     def _names(self, items):
         return ", ".join([item.name for item in items])

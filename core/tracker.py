@@ -5,6 +5,8 @@ class ItemTracker:
     def __init__(self, name):
         self.name = name
         self.state = "WITH YOU"
+        # False until a scan row matches this item; UI may append "(Not Seen)" when False.
+        self.is_visible = False
         self.last_seen_time = None
         self.last_rssi = None
         self.last_location = None
@@ -49,6 +51,15 @@ class ItemTracker:
 
     def is_lost(self):
         return self.state == "LEFT BEHIND"
+
+    @property
+    def status_kind(self):
+        """CSS / badge key: left-behind | moving-away | with-you (not the full label)."""
+        if self.state == "LEFT BEHIND":
+            return "left-behind"
+        if self.state == "LEAVING":
+            return "moving-away"
+        return "with-you"
 
     @property
     def display_status(self):

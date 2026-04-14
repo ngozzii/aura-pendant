@@ -66,13 +66,22 @@ class AlertManager:
         done = self._on_vibration_complete
 
         if alert_type == "warning":
-            print(f"ALERT (warning): [{item_name}]")
-            self._motor.vibrate(1.0, done)
+            print("[DEBUG] WARNING vibration")
+            self._motor.vibrate_pulses(
+                2, 0.1, 0.1, on_complete=self._on_vibration_complete
+            )
+
         elif alert_type == "escalated":
-            print(f"ALERT (escalated): [{item_name}]")
-            self._motor.vibrate(2.0, done)
-        else:
-            self._motor.vibrate_pulses(3, 0.15, 0.1, done)
+            print("[DEBUG] ESCALATED vibration")
+            self._motor.vibrate_pulses(
+                3, 0.1, 0.1, on_complete=self._on_vibration_complete
+            )
+
+        else:  # lost
+            print("[DEBUG] LOST vibration")
+            self._motor.vibrate_pulses(
+                4, 0.1, 0.1, on_complete=self._on_vibration_complete
+            )
 
     def cleanup(self):
         self._motor.cleanup()

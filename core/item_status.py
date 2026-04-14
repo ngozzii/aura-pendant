@@ -1,20 +1,19 @@
-"""User-facing status labels from RSSI and tracker state."""
+"""User-facing status labels: strict tracker states plus optional (Not Seen) tag."""
+
 
 from config import RSSI_DISPLAY_LOST_MAX, STRONG_RSSI_RECOVERY_THRESHOLD
 
 
 def get_status(rssi):
     """
-    Map RSSI (dBm) to a coarse status. Stronger signal = higher numeric value.
-    Bands use STRONG_RSSI_RECOVERY_THRESHOLD as the inclusive lower bound for "With You"
-    (same nominal level as recovery in system_engine, which uses strict > for GPIO logic).
+    RSSI band helper (e.g. CLI). Does not return \"Not Seen\"; invalid/missing RSSI maps to \"With You\".
     """
     if rssi is None:
-        return "Not Seen"
+        return "With You"
     try:
         r = float(rssi)
     except (TypeError, ValueError):
-        return "Not Seen"
+        return "With You"
     if r >= STRONG_RSSI_RECOVERY_THRESHOLD:
         return "With You"
     if r > RSSI_DISPLAY_LOST_MAX:
@@ -23,9 +22,17 @@ def get_status(rssi):
 
 
 def get_item_display_status(item):
-    """Tracker state overrides RSSI when the engine has marked leaving / lost."""
+    """
+    Primary label from tracker state only: Left Behind / Moving Away / With You.
+    Appends \" (Not Seen)\" when is_visible is False (not a separate state).
+    """
     if item.state == "LEFT BEHIND":
-        return "Left Behind"
-    if item.state == "LEAVING":
-        return "Moving Away"
-    return get_status(item.last_rssi)
+        base = "Left Behind"
+    elif item.state == "LEAVING":
+        base = "Moving Away"
+    else:
+        base = "With You"
+
+    if getattr(item, "is_visible", True) is False:
+        return f"{base} (Not Seen)"
+    return base
